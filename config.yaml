@@ -2,7 +2,8 @@
 all:
     samplesheet: '/trinity/home/r115502/MINT/WES-snake/samplesheet.csv' # specify sarek samplesheet: must contain patient, sample, status, lane, fastq_1 and fastq_2
     data_dir: "/trinity/home/r115502/MINT/fastq/"  # Specify main data directory
-    output_dir: "/trinity/home/r115502/MINT/output/"                  # Specify main output directory   
+    output_dir: "/trinity/home/r115502/MINT/output/"                  # Specify main output directory
+    ref: '/trinity/home/r115502/Resources/BWAIndex/genome.fa'
 
 sarek:
   workdir: '/trinity/home/r115502/MINT/WES-snake/.sarek/work/' # directory to save sarek working dir
@@ -22,5 +23,3 @@ ACE:
 CNH:
     path: '/trinity/home/r115502/MINT/WES-snake/scripts/CNH/'
     
-PureCN:
-    ref: '/trinity/home/r115502/Resources/BWAIndex/genome.fa' 

@@ -6,15 +6,15 @@ import os
 # 0.1 Prepare variables and wildcards
 output_dir = config["all"]["output_dir"]
 
-# Fetch Patient wildcards
-Patients = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('samplesheet.csv') else []
+# Fetch Sample wildcards
+Samples = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('samplesheet.csv') else []
 
 #-------------------------------------------------------------------------------------------------------------------
 # 0.2 specify target rules
 rule all:
     input:
         'samplesheet.csv',
-        expand(output_dir + 'QDNAseq/{binsize}/{patient}/plots/QDNAseq_segmented_profile.pdf', patient = Patients, binsize = config['CopyWriteR']['binsizes'])
+        expand(output_dir + 'QDNAseq/{binsize}/{sample}/plots/QDNAseq_segmented_profile.pdf', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++
 rule Create_Samplesheet:
@@ -26,7 +26,7 @@ rule Create_Samplesheet:
     conda:
         'envs/R.yaml'
     script:
-        'scripts/Create_Samplesheet_MINT.R'
+        'scripts/Create_Samplesheet_PON.R'
 
         
 #+++++++++++++++++++++++++++++++++++++++++ 1 RUN SAREK VARIANT CALLING +++++++++++++++++++++++++++++++++++++++++++++
@@ -44,19 +44,18 @@ rule Download_Sarek:
 	nf-core pipelines download --outdir {output} --container-system singularity --compress none -r dev sarek
         """
 
-# 1.2 Run
+# 1.2 Run Sarek
 rule Sarek:
     input:
         samplesheet = 'samplesheet.csv',
         sarek = ".nf-core-sarek/"
     output:
-        samplesheet = output_dir + 'sarek/{patient}/csv/samplesheet.csv',
-        mapped = temp(directory(output_dir + "sarek/{patient}/preprocessing/mapped/")),
-        recal = temp(directory(output_dir + "sarek/{patient}/preprocessing/recalibrated/")),
-        md_cram = temp(output_dir + "sarek/{patient}/preprocessing/markduplicates/{patient}_tumor1/{patient}_tumor1.md.cram"),
-        md_bam = temp(output_dir + "sarek/{patient}/preprocessing/markduplicates/{patient}_tumor1/{patient}_tumor1.md.bam"),
-        vcf = temp(output_dir + "sarek/{patient}/annotation/mutect2/{patient}_tumor1/{patient}_tumor1.mutect2.filtered_snpEff_VEP.ann.vcf.gz"),
-        vcf_annotated = output_dir + "sarek/{patient}/annotation/mutect2/{patient}_tumor1/{patient}_tumor1.annotated.vcf.gz"
+        samplesheet = output_dir + 'sarek/{sample}/csv/samplesheet.csv',
+        vcf = 'output/sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz',
+        mapped = temp(directory(output_dir + "sarek/{sample}/preprocessing/mapped/")),
+        recal = temp(directory(output_dir + "sarek/{sample}/preprocessing/recalibrated/")),
+        md_cram = temp(output_dir + "sarek/{sample}/preprocessing/markduplicates/{sample}_normal1/{sample}_normal1.md.cram"),
+        md_bam = temp(output_dir + "sarek/{sample}/preprocessing/markduplicates/{sample}_normal1/{sample}_normal1.md.bam"),
     threads: 8
     resources:
         mem_mb=50000,
@@ -65,26 +64,25 @@ rule Sarek:
     conda:
         "envs/nextflow.yaml"
     log:
-        "logs/sarek/{patient}/nextflow_"+datetime.now().strftime("%Y_%m_%d_%H%M%S")+".log"
+        "logs/sarek/{sample}/nextflow_"+datetime.now().strftime("%Y_%m_%d_%H%M%S")+".log"
     params:
         version = 'dev',
         genome = 'GATK.GRCh38',
         profile = "singularity",
-        tools = "mutect2,merge",
+        tools = "mutect2",
         Mutect2_params = 'params/mutect2_params.json',
         targets = config['sarek']['targetregions'],
         intervals = config['sarek']['interval_padding'],
-        HMF_PON = config['sarek']['HMF_PON'],
         singularity_dir = f"{config['sarek']['workdir']}/singularity/cache/",
-        workdir=lambda wildcards: f"{config['sarek']['workdir']}/{wildcards.patient}",
-        outdir=lambda wildcards: f"{output_dir}/sarek/{wildcards.patient}",
+        workdir=lambda wildcards: f"{config['sarek']['workdir']}/{wildcards.sample}",
+        outdir=lambda wildcards: f"{output_dir}/sarek/{wildcards.sample}",
     shell:
         """
         export NXF_WORK={params.workdir}
         export NXF_SINGULARITY_CACHEDIR={params.singularity_dir}
 
         # Subset samplesheet
-        awk -F',' '$1=="patient" || $1=="{wildcards.patient}"' {input.samplesheet} > {output.samplesheet}
+        awk -F',' '$1=="sample" || $1=="{wildcards.sample}"' {input.samplesheet} > {output.samplesheet}
 
         nextflow -log {log} run .nf-core-sarek/{params.version}/ \
            -profile {params.profile} \
@@ -102,10 +100,6 @@ rule Sarek:
 
         # Save alignment as .bam (to be fixed with --save-output-as-bam in new sarek release)
         samtools view -b -o {output.md_bam} {output.md_cram}
-
-        # Add HMF PON annotation
-        bcftools annotate {output.vcf} -a {params.HMF_PON} -c INFO -O z -o {output.vcf_annotated}
-        bcftools index -t {output.vcf_annotated}
         
         # Clean cache and intermediate files upon completion but keep on failure
         status=$?
@@ -118,24 +112,48 @@ rule Sarek:
         """
 
 
+#-------------------------------------------------------------------------------------------------------------        
+# 1.2 Create Mutect2 PON
+rule Create_PON:
+     input:
+        expand('output/sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz', sample = Samples)
+    output:
+        PON = output_dir + 'PON/PON.vcf.gz'
+    threads: 8
+    resources:
+        mem_mb=50000,
+        gpu=0,
+    conda:
+        "envs/nextflow.yaml"
+    params:
+        ref = config['all']['ref'],
+    shell:
+        """
+        gatk CreateSomaticPanelOfNormals \
+        -R {params.ref} \
+        --vcfs {input} \
+        -O {output}
+        """
+
+
 #+++++++++++++++++++++++++++++++++++++++++ 2 PERFORM CNA ANALYSIS +++++++++++++++++++++++++++++++++++++++++++++
 # 2.1 Run CopywriteR, QDNAseq, ACE, CNH, calculate stats and export results
 rule CNA_analysis:
     input:
-        bam= output_dir + "sarek/{patient}/preprocessing/markduplicates/{patient}_tumor1/{patient}_tumor1.md.bam"
+        bam= output_dir + "sarek/{sample}/preprocessing/markduplicates/{sample}_normal1/{sample}_normal1.md.bam"
     output:
-        sample_dir = temp(directory(output_dir + "copywriter/{binsize}/{patient}/")),
-        QDNAseq = output_dir + 'QDNAseq/{binsize}/{patient}/data/QDNAseq_Segmented.Rds',
-        Profile = output_dir + 'QDNAseq/{binsize}/{patient}/plots/QDNAseq_segmented_profile.pdf',
-        Segments = output_dir + 'QDNAseq/{binsize}/{patient}/data/QDNAseq_Segments.txt',
-        Segments_igv = temp(output_dir + 'QDNAseq/{binsize}/{patient}/data/QDNAseq_Segments.igv'),
-        Called = output_dir + 'QDNAseq/{binsize}/{patient}/data/QDNAseq_calls.txt',
-        CNA_stats = output_dir + 'QDNAseq/{binsize}/{patient}/data/CNA_stats.txt',
-        ACE_results = output_dir + 'ACE/{binsize}/{patient}/ACE_fits.txt',
-        ACE_matrix = output_dir + 'ACE/{binsize}/{patient}/ACE_matrixplot.pdf',
-        CNH_results = output_dir + 'CNH/{binsize}/{patient}/CNH_results.txt',
-        CNH_plot = output_dir + 'CNH/{binsize}/{patient}/CNH_plot.pdf',
-        CNH_error_plot = output_dir + 'CNH/{binsize}/{patient}/CNH_errorplot.pdf',
+        sample_dir = temp(directory(output_dir + "copywriter/{binsize}/{sample}/")),
+        QDNAseq = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segmented.Rds',
+        Profile = output_dir + 'QDNAseq/{binsize}/{sample}/plots/QDNAseq_segmented_profile.pdf',
+        Segments = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segments.txt',
+        Segments_igv = temp(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segments.igv'),
+        Called = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_calls.txt',
+        CNA_stats = output_dir + 'QDNAseq/{binsize}/{sample}/data/CNA_stats.txt',
+        ACE_results = output_dir + 'ACE/{binsize}/{sample}/ACE_fits.txt',
+        ACE_matrix = output_dir + 'ACE/{binsize}/{sample}/ACE_matrixplot.pdf',
+        CNH_results = output_dir + 'CNH/{binsize}/{sample}/CNH_results.txt',
+        CNH_plot = output_dir + 'CNH/{binsize}/{sample}/CNH_plot.pdf',
+        CNH_error_plot = output_dir + 'CNH/{binsize}/{sample}/CNH_errorplot.pdf',
     resources:
         mem_mb=10000,
         gpu=0,
@@ -151,50 +169,3 @@ rule CNA_analysis:
         "envs/CNA.yaml"
     script:
         'scripts/CNA_analysis.R'
-
-
-#+++++++++++++++++++++++++++++++++++++++++ 3 DISTINGUISH GERMLINE-SOMATIC +++++++++++++++++++++++++++++++++++++++++++++
-# 3.1 Run PureCN to call tumor purity/ploidy, classify variants and calculate CCF  
-rule PureCN:
-    input:
-        vcf =  output_dir + "sarek/{patient}/annotation/mutect2/{patient}_tumor1/{patient}_tumor1.annotated.vcf.gz",
-        Segments = output_dir + 'QDNAseq/100kbp/{patient}/data/QDNAseq_Segments.txt'
-    output:
-        intervals = temp(output_dir + 'PureCN/{patient}/baits_hg19_intervals.txt'),
-        PureCN_rds = output_dir + 'PureCN/{patient}/{patient}_tumor1.rds',
-        variants = output_dir + 'PureCN/{patient}/{patient}_tumor1_variants.csv'
-    params:
-        genome = 'hg38',
-        outdir = output_dir + 'PureCN/{patient}/',
-        ref = config['PureCN']['ref'],
-        targets = config['sarek']['targetregions']
-    conda:
-        "envs/purecn.yaml"
-    shell:
-        """
-        # Find PureCN installation
-        PureCN_lib=$CONDA_PREFIX/lib/R/library/PureCN/extdata
-
-        # Create intervals file
-        Rscript $PureCN_lib/IntervalFile.R \
-        --in-file {params.targets} \
-        --fasta {params.ref} \
-        --out-file {output.intervals} \
-        --off-target \
-        --genome {params.genome}
-        
-        # Run PureCN
-        Rscript $PureCN_lib/PureCN.R \
-        --out {params.output_dir} \
-        --sampleid {patient} \
-        --segfile {input.Segments} \
-        --vcf {input.vcf} \
-        --intervals {output.intervals} \
-        --genome {params.genome}
-
-        # Calculate signatures/statistics
-         Rscript $PureCN_lib/Dx.R \
-        --rds {output.PureCN_rds} \
-        --callable {params.targets} \
-        --signatures
-        """

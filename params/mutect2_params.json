@@ -1,5 +1,5 @@
 process{
     withName:"MUTECT2" {
-        ext.args = { params.ignore_soft_clipped_bases ? "--dont-use-soft-clipped-bases true --f1r2-tar-gz ${task.ext.prefix}.f1r2.tar.gz --genotype-germline-sites --genotype-pon-sites" : "--f1r2-tar-gz ${task.ext.prefix}.f1r2.tar.gz --genotype-germline-sites --genotype-pon-sites" }
+        ext.args = { params.ignore_soft_clipped_bases ? "--dont-use-soft-clipped-bases true --f1r2-tar-gz ${task.ext.prefix}.f1r2.tar.gz --max-mnp-distance 0" : "--f1r2-tar-gz ${task.ext.prefix}.f1r2.tar.gz --max-mnp-distance 0" }
     }
 }
