@@ -118,6 +118,7 @@ rule Create_PON:
      input:
         expand('output/sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz', sample = Samples)
     output:
+        merged_vcf = output_dir + 'PON/merged_normals.vcf.gz'
         PON = output_dir + 'PON/PON.vcf.gz'
     threads: 8
     resources:
@@ -129,9 +130,12 @@ rule Create_PON:
         ref = config['all']['ref'],
     shell:
         """
+        # merge vcfs
+        bcftools merge {input} --merge all -o {output.merged_vcf}
+        
         gatk CreateSomaticPanelOfNormals \
         -R {params.ref} \
-        --vcfs {input} \
+        -V {output.merged_vcf} \
         -O {output}
         """
 
