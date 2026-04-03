@@ -1,10 +1,12 @@
 ---
 all:
-    samplesheet: '/trinity/home/r115502/MINT/WES-snake/samplesheet.csv' # specify sarek samplesheet: must contain patient, sample, status, lane, fastq_1 and fastq_2
-    data_dir: "/trinity/home/r115502/MINT/fastq/"  # Specify main data directory
     output_dir: "/trinity/home/r115502/MINT/output/"                  # Specify main output directory
     ref: '/trinity/home/r115502/Resources/BWAIndex/genome.fa'
 
+MINT:
+    data_dir: "/trinity/home/r115502/MINT/fastq_batch2/" 
+    sample_overview: '/trinity/home/r115502/MINT/data/1kuvre_fastq_list.csv'
+    
 sarek:
   workdir: '/trinity/home/r115502/MINT/WES-snake/.sarek/work/' # directory to save sarek working dir
   targetregions : "/trinity/home/r115502/Resources/target_regions/S31285117_Regions_Annotated.bed" # Exome regions

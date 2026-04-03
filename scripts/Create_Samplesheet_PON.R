@@ -1,8 +1,8 @@
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Create_Samplesheet_MINT.R
+# Create_Samplesheet_PON.R
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #
-# Create samplesheet for WES analysis of MINT samples
+# Create samplesheet for WES analysis of normal samples
 #
 # Author: Jurriaan Janssen (j.janssen.1@erasmusmc.nl)
 #
@@ -13,7 +13,7 @@
 # 1) 
 #
 # History:
-#  30-03-2026: File creation
+#  03-04-2026: File creation
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # 0.1  Load packages
 #-------------------------------------------------------------------------------
@@ -23,12 +23,12 @@ suppressMessages(library(dplyr))
 # 0.2 Parse command line arguments
 #-------------------------------------------------------------------------------
 if(exists("snakemake")){
-    data_dir <- snakemake@params[["data_dir"]]
-    input_sample_overview <- snakemake@params[["sample_overview"]]
+    data_dir_MINT <- snakemake@params[["data_dir_MINT"]]
+    input_sample_overview_MINT <- snakemake@params[["sample_overview_MINT"]]
     output <- snakemake@output[[1]]
 }else{
-    data_dir <-  '~/mnt/BIGR_home/MINT/fastq/'
-    input_sample_overview <- '../data/MINT_db.xlsx'
+    data_dir_MINT <-   '~/mnt/BIGR_home/MINT/fastq_batch2/'
+    input_sample_overview_MINT <- '~/mnt/BIGR_home/MINT/data/1kuvre_fastq_list.csv'
     output <- 'samplesheet.csv'
 }
 
@@ -36,32 +36,37 @@ if(exists("snakemake")){
 # 1.1 Read data and fetch file paths
 #-------------------------------------------------------------------------------
 # Read sample overview
-sample_overview <- readxl::read_xlsx(input_sample_overview , skip = 2, sheet = 'DB_Iris')
+sample_overview_MINT <- read.delim(input_sample_overview_MINT, sep = ',')
 
 # Fetch WES .fastq files
-fastq_paths <- list.files(data_dir, pattern = '.fastq.gz', recursive = T, full.names = T)
+fastq_paths_batch_MINT <- list.files(data_dir_MINT, pattern = '.fastq.gz', recursive = T, full.names = T)
 
 #-------------------------------------------------------------------------------
-# 1.2 Prepare files/sheet
+# 1.2 Prepare files/sheet\
 #-------------------------------------------------------------------------------
-# Fetch fastq file IDs
-fastq_files <- data.frame(fastq = fastq_paths) %>%
+fastq_files_MINT <- data.frame(fastq = fastq_paths_batch_MINT) %>%
     mutate(GS_ID = purrr::map_chr(fastq, ~strsplit(basename(.x),'_')[[1]][2]),
            read = ifelse(grepl('R1.fastq.gz', fastq),'fastq_1','fastq_2'),
            lane =  purrr::map_chr(fastq, ~strsplit(basename(.x),'_')[[1]][4])) %>%
-    tidyr::pivot_wider(names_from = read , values_from = fastq)
+    tidyr::pivot_wider(names_from = read , values_from = fastq) %>%
+    mutate(basenameR1 = basename(fastq_1))
 
-# Fetch samplenames
-sample_overview <-
-    sample_overview %>%
-    mutate(patient = gsub('\\(res2\\)','_R2',paste0('MINT',gsub('^M','',`MINT subject nr`)))) %>%
-    select(patient, GS_ID, Sentrix_ID) %>%
+sample_overview_MINT <- sample_overview_MINT %>%
+    mutate(patient = gsub('_M','',purrr::map_chr(RGSM,~strsplit(.x,'-')[[1]][4])),
+           sample = paste0(patient,'_',ifelse(is.na(patient), NA, paste0("normal", row_number()))),
+           basenameR1 = basename(Read1File)) %>%
     group_by(patient) %>%
-    mutate(sample = paste0(patient,'_',ifelse(is.na(patient), NA, paste0("tumor", row_number())))) %>%
+    mutate(sample = paste0(patient,'_',ifelse(is.na(patient), NA, paste0("normal", row_number())))) %>%
     ungroup() %>%
+    filter(grepl('Normal',patient)) %>%
     mutate(status = 1)
+
+print(sample_overview_MINT)
+print(fastq_files_MINT)
+
+sample_overview_MINT %>% left_join(fastq_files_MINT) %>% print()
 
 #-------------------------------------------------------------------------------
 # 1.2 Merge and write to file
 #-------------------------------------------------------------------------------
-fastq_files %>% left_join(sample_overview) %>% mutate(status = 1) %>%  select(patient,sample,status,lane,fastq_1,fastq_2) %>% write.table(file=output, sep = ',', quote = F, row.names = F)
+sample_overview_MINT %>% left_join(fastq_files_MINT) %>%  select(patient,sample,status,lane,fastq_1,fastq_2) %>% write.table(file=output, sep = ',', quote = F, row.names = F)

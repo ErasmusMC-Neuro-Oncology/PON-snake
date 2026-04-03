@@ -10,6 +10,8 @@ latency-wait: 60
 slurm-logdir: "logs/slurm/"
 slurm-jobname: 'WES'
 
+rerun-triggers: 'mtime'
+
 use-conda: True
 use-singularity: False
 rerun-incomplete: True

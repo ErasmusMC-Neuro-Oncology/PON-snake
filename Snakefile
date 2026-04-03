@@ -13,14 +13,13 @@ Samples = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('
 # 0.2 specify target rules
 rule all:
     input:
-        'samplesheet.csv',
         expand(output_dir + 'QDNAseq/{binsize}/{sample}/plots/QDNAseq_segmented_profile.pdf', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++
 rule Create_Samplesheet:
     params:
-        data_dir = config['all']['data_dir'],
-        sample_overview = '../data/MINT_db.xlsx',
+        data_dir_MINT = config['MINT']['data_dir'],
+        sample_overview_MINT = config['MINT']['sample_overview'],
     output:
         'samplesheet.csv'
     conda:
@@ -33,7 +32,7 @@ rule Create_Samplesheet:
 # 1.1 Download Sarek
 rule Download_Sarek:
     output:
-        ".nf-core-sarek/"
+        directory(".nf-core-sarek/")
     params:
         singularity_dir = f"{config['sarek']['workdir']}/singularity/cache/"
     conda:
@@ -82,7 +81,7 @@ rule Sarek:
         export NXF_SINGULARITY_CACHEDIR={params.singularity_dir}
 
         # Subset samplesheet
-        awk -F',' '$1=="sample" || $1=="{wildcards.sample}"' {input.samplesheet} > {output.samplesheet}
+        awk -F',' '$1=="patient" || $1=="{wildcards.sample}"' {input.samplesheet} > {output.samplesheet}
 
         nextflow -log {log} run .nf-core-sarek/{params.version}/ \
            -profile {params.profile} \
@@ -115,10 +114,10 @@ rule Sarek:
 #-------------------------------------------------------------------------------------------------------------        
 # 1.2 Create Mutect2 PON
 rule Create_PON:
-     input:
+    input:
         expand('output/sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz', sample = Samples)
     output:
-        merged_vcf = output_dir + 'PON/merged_normals.vcf.gz'
+        merged_vcf = output_dir + 'PON/merged_normals.vcf.gz',
         PON = output_dir + 'PON/PON.vcf.gz'
     threads: 8
     resources:
