@@ -1,6 +1,6 @@
 ---
 all:
-    output_dir: "/trinity/home/r115502/MINT/output/"                  # Specify main output directory
+    output_dir: "/trinity/home/r115502/PON/output/"                  # Specify main output directory
     ref: '/trinity/home/r115502/Resources/BWAIndex/genome.fa'
 
 MINT:
@@ -8,7 +8,7 @@ MINT:
     sample_overview: '/trinity/home/r115502/MINT/data/1kuvre_fastq_list.csv'
     
 sarek:
-  workdir: '/trinity/home/r115502/MINT/WES-snake/.sarek/work/' # directory to save sarek working dir
+  workdir: '/trinity/home/r115502/PON/PON-snake/.sarek/work/' # directory to save sarek working dir
   targetregions : "/trinity/home/r115502/Resources/target_regions/S31285117_Regions_Annotated.bed" # Exome regions
   interval_padding: 100 # region padding around capture regions
   HMF_PON: "/trinity/home/r115502/Resources/PON/hg38/hmf_pon.vcf.gz" # Path to HMF PON for annotation
@@ -18,10 +18,3 @@ CopyWriteR:
     binsizes: ['100kbp','1000kbp'] # CopyWriteR binsize (default=100kbp and 1000kbp)
     cytobands: '/trinity/home/r115502/Resources/cytobands/hg38/cytoBand.txt'
 
-ACE:
-    penalty : 0 # Penalty for low purity solutions
-    penploidy : 0.5 # penalty for high ploidy solutions
-
-CNH:
-    path: '/trinity/home/r115502/MINT/WES-snake/scripts/CNH/'
-    
