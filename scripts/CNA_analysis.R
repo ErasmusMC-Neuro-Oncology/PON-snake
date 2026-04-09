@@ -35,7 +35,8 @@ if(exists("snakemake")){
     binsize <- snakemake@wildcards[["binsize"]]
     cores <- snakemake@params[["cores"]]
     sample_dir <- snakemake@output[["sample_dir"]]
-    QDNAseq_output <- snakemake@output[["QDNAseq"]]
+    QDNAseq_segmented_output <- snakemake@output[["QDNAseq_Segmented"]]
+    QDNAseq_readcounts_output <- snakemake@output[["QDNAseq_Readcounts"]]
     Profile_output <- snakemake@output[["Profile"]]  
     Segments_output <- snakemake@output[["Segments"]]
     
@@ -149,23 +150,27 @@ corrected <- applyFilters(QDNAseqCopyNumbers, residual=TRUE, blacklist=TRUE, map
     estimateCorrection() %>%
     correctBins() %>%
     normalizeBins() %>%
-    smoothOutlierBins() %>%
+    smoothOutlierBins() 
+
+
+segmented <- corrected %>%
     segmentBins() %>%
     normalizeSegmentedBins()
+
 
 #-------------------------------------------------------------------------------
 # 4.2 Plot QDNAseq profile and callBins
 #-------------------------------------------------------------------------------
 pdf(Profile_output, width = 6 , height = 5)
-plot(corrected)
+plot(segmented)
 dev.off()
 
 #-------------------------------------------------------------------------------
 # 4.3 Retrieve segments
 #-------------------------------------------------------------------------------
 # Fetch segments and calculate their values
-Segments <- fData(corrected) %>%
-    mutate(seg.mean =assayData(corrected)$segmented[,1]) %>%
+Segments <- fData(segmented) %>%
+    mutate(seg.mean =assayData(segmented)$segmented[,1]) %>%
     filter(!is.na(seg.mean)) %>%
     arrange(chromosome, start) %>%
   group_by(chromosome) %>%
@@ -183,18 +188,18 @@ Segments <- fData(corrected) %>%
             chromosome %in% c("X","x") ~ 23,
             chromosome %in% c("Y","y") ~ 24,
             TRUE ~ as.numeric(chromosome)),
-        ID = sampleNames(corrected),
+        ID = sampleNames(segmented),
         chrom = paste0('chr',chromosome)) %>%
   arrange(chrom_order, loc.start) %>%
     select(ID, chrom, loc.start, loc.end, num.mark, seg.mean) 
-
 
 
 #-------------------------------------------------------------------------------
 # 5.1 Write to file
 #-------------------------------------------------------------------------------
 # Save QDNAseq object
-saveRDS(corrected,QDNAseq_output)
+saveRDS(segmented,QDNAseq_segmented_output)
+saveRDS(corrected,QDNAseq_readcounts_output)
 
 # Save segments
 write.table(Segments, Segments_output, sep = '\t',quote = F, row.names = F)

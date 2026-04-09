@@ -28,15 +28,21 @@ if(exists("snakemake")){
     output_PON <- snakemake@output[["PON"]]
    
 }else{
-    input_QDNAseq <- Sys.glob('../output/QDNAseq/100kbp/*/data/QDNAseq_Segmented.Rds ')
+    input_QDNAseq <- Sys.glob('../output/QDNAseq/100kbp/*/data/QDNAseq_Segmented.Rds')
     output_PON <- '../output/PON/CNA_PON_100kbp.Rds'
     
 }
 
 #-------------------------------------------------------------------------------
-# 1.1 Read QDNAseq objects
+# 1.1 Read and combine QDNAseq objects
 #-------------------------------------------------------------------------------
-
+for(i in seq_along(input_QDNAseq)){
+    if(i == 1){
+        CNA_data <- readRDS(input_QDNAseq[i])
+    }else{
+        CNA_data <- Biobase::combine(CNA_data, readRDS(input_QDNAseq[i]))
+    }
+}
 
 
 #-------------------------------------------------------------------------------

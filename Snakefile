@@ -13,7 +13,7 @@ Samples = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('
 # 0.2 specify target rules
 rule all:
     input:
-        expand(output_dir + 'QDNAseq/{binsize}/{sample}/plots/QDNAseq_segmented_profile.pdf', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
+        expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++
 rule Create_Samplesheet:
@@ -87,7 +87,6 @@ rule Sarek:
         nextflow -log {log} run {input.sarek}/{params.version}/ \
            -profile {params.profile} \
            -work-dir {params.workdir} \
-           -resume \
            -c {params.Mutect2_params} \
               --input {output.samplesheet} \
               --outdir {params.outdir} \
@@ -152,7 +151,8 @@ rule CNA_analysis:
         bam= output_dir + "sarek/{sample}/preprocessing/markduplicates/{sample}_normal1/{sample}_normal1.md.bam"
     output:
         sample_dir = temp(directory(output_dir + "copywriter/{binsize}/{sample}/")),
-        QDNAseq = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segmented.Rds',
+        QDNAseq_Readcounts = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds',
+        QDNAseq_Segmented = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segmented.Rds',
         Profile = output_dir + 'QDNAseq/{binsize}/{sample}/plots/QDNAseq_segmented_profile.pdf',
         Segments = output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segments.txt'
     resources:
@@ -169,7 +169,7 @@ rule CNA_analysis:
 
 rule Create_CNA_PON:
     input:
-        QDNAseq = lambda wildcards: expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segmented.Rds',sample = Samples, binsize = wildcards.binsize)
+        QDNAseq = lambda wildcards: expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds',sample = Samples, binsize = wildcards.binsize)
     output:
         PON = output_dir + 'PON/CNA_PON_{binsize}.Rds',
     resources:
