@@ -13,6 +13,7 @@ Samples = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('
 # 0.2 specify target rules
 rule all:
     input:
+        expand(output_dir + 'PON/CNA_PON_{binsize}.Rds', binsize = config['CopyWriteR']['binsizes']),
         expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++

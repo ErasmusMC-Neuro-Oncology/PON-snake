@@ -2,7 +2,7 @@
 # Create_CNA_PON.R
 #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #
-# Combine normal sampels
+# Combine normal samples
 #
 # Author: Jurriaan Janssen (j.janssen.1@erasmusmc.nl)
 #
@@ -19,7 +19,8 @@
 #-------------------------------------------------------------------------------
 suppressMessages(library(dplyr))
 suppressMessages(library(QDNAseq))
-
+suppressMessages(library(Biobase))
+source('scripts/PoolRuns.R')
 #-------------------------------------------------------------------------------
 # 0.2 Parse command line arguments
 #-------------------------------------------------------------------------------
@@ -28,7 +29,7 @@ if(exists("snakemake")){
     output_PON <- snakemake@output[["PON"]]
    
 }else{
-    input_QDNAseq <- Sys.glob('../output/QDNAseq/100kbp/*/data/QDNAseq_Segmented.Rds')
+    input_QDNAseq <- Sys.glob('../output/QDNAseq/100kbp/*/data/QDNAseq_Readcounts.Rds')
     output_PON <- '../output/PON/CNA_PON_100kbp.Rds'
     
 }
@@ -44,6 +45,12 @@ for(i in seq_along(input_QDNAseq)){
     }
 }
 
+
+
+#-------------------------------------------------------------------------------
+# 1.2 Pool runs
+#-------------------------------------------------------------------------------
+PON <- poolRuns(CNA_data,rep("ReferencePool",ncol(CNA_data)))
 
 #-------------------------------------------------------------------------------
 # 2.1 Write to file
