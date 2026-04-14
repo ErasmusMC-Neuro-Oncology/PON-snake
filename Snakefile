@@ -13,14 +13,13 @@ Samples = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('
 # 0.2 specify target rules
 rule all:
     input:
+        expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Segments.txt',sample = Samples, binsize = config['CopyWriteR']['binsizes']),
         expand(output_dir + 'PON/CNA_PON_{binsize}.Rds', binsize = config['CopyWriteR']['binsizes']),
-        expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++
 rule Create_Samplesheet:
     params:
-        data_dir_MINT = config['MINT']['data_dir'],
-        sample_overview_MINT = config['MINT']['sample_overview'],
+        data_dir = config['all']['data_dir'],
     output:
         'samplesheet.csv'
     conda:
@@ -33,15 +32,15 @@ rule Create_Samplesheet:
 # 1.1 Download Sarek
 rule Download_Sarek:
     output:
-        directory(".nf-core-sarek/")
-    params:
-        singularity_dir = f"{config['sarek']['workdir']}/singularity/cache/"
+        sarek = directory(".nf-core-sarek/"),
+        singularity_dir = config['sarek']['workdir'] + "singularity/cache/"
     conda:
         "envs/nextflow.yaml"
     shell:
         """
-	export NXF_SINGULARITY_CACHEDIR={params.singularity_dir}        
-	nf-core pipelines download --outdir {output} --container-system singularity --compress none -r dev sarek
+	export NXF_SINGULARITY_CACHEDIR={output.singularity_dir}
+        
+	nf-core pipelines download --outdir {output.sarek} --container-system singularity --compress none -r dev sarek
         """
 
 # 1.2 Run Sarek
