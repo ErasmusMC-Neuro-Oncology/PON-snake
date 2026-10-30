@@ -1,12 +1,19 @@
 ---
 all:
-    output_dir: "/trinity/home/r115502/PON/output/"                  # Specify main output directory
+    output_dir: "/trinity/home/r115502/PON/output/"
+    data_dir: "/trinity/home/r115502/PON/PON-snake/data/"
     ref: '/trinity/home/r115502/Resources/BWAIndex/genome.fa'
+    samplesheet_nas: "/trinity/home/r115502/NONC_Samplesheet/output/2026-10-21/Samplesheet_NAS.tsv"
+    sample_regex: 'Normal_brain' 
 
-MINT:
-    data_dir: "/trinity/home/r115502/MINT/fastq_batch2/" 
-    sample_overview: '/trinity/home/r115502/MINT/data/1kuvre_fastq_list.csv'
-    
+# Raw data is READ from the NAS; nothing is written back (no `root` needed).
+# The fastqs are nas() inputs of the Sarek rule, so Snakemake fetches them per
+# sample and deletes the local copies when that sample's job finishes.
+nas_storage:
+    host: 'neuro-genomic-1.erasmusmc.nl'
+    user: 'second_surgery_admin2'                 # an account with READ access to the raw data
+    password_file: '~/.passwd/second_surgery2_pass'   # chmod 600
+
 sarek:
   workdir: '/trinity/home/r115502/PON/PON-snake/.sarek/work/' # directory to save sarek working dir
   targetregions : "/trinity/home/r115502/Resources/target_regions/S31285117_Regions_Annotated.bed" # Exome regions
@@ -15,6 +22,5 @@ sarek:
 
 CopyWriteR:
     cores: 1 # number of cores
-    binsizes: ['100kbp','1000kbp'] # CopyWriteR binsize (default=100kbp and 1000kbp)
+    binsizes: ['100kbp','500kbp','1000kbp'] # CopyWriteR binsize (default=100kbp and 1000kbp)
     cytobands: '/trinity/home/r115502/Resources/cytobands/hg38/cytoBand.txt'
-

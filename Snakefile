@@ -1,34 +1,46 @@
 configfile: "config.yaml"
+include: "nas.smk"            # NAS storage + the normals and their fastqs on the NAS
+
 from datetime import datetime
 import pandas as pd
 import os
+
 #+++++++++++++++++++++++++++++++++++++++ 0 PREPARE WILDCARDS AND TARGET ++++++++++++++++++++++++++++++++++++++++++++
 # 0.1 Prepare variables and wildcards
 output_dir = config["all"]["output_dir"]
 
-# Fetch Sample wildcards
-Samples = pd.read_csv('samplesheet.csv')['patient'].unique() if os.path.isfile('samplesheet.csv') else []
+# Fetch Sample wildcards -- from the MINT overview + the NAS listing (see nas.smk),
+# not from the generated samplesheet, so the DAG is the same on a clean checkout.
+Samples = PATIENTS
 
 #-------------------------------------------------------------------------------------------------------------------
 # 0.2 specify target rules
 rule all:
     input:
+        output_dir + 'PON/PON.vcf.gz',
         expand(output_dir + 'PON/CNA_PON_{binsize}.Rds', binsize = config['CopyWriteR']['binsizes']),
-        expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds', sample = Samples, binsize = config['CopyWriteR']['binsizes'])
+        expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds',
+               sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++
+# Writes the paths the NAS fastqs WILL be retrieved to (via symlinks with
+# shell-safe names). It declares no NAS files itself, so nothing is downloaded
+# here: the Sarek rule declares them and triggers the transfer per sample.
 rule Create_Samplesheet:
-    params:
-        data_dir_MINT = config['MINT']['data_dir'],
-        sample_overview_MINT = config['MINT']['sample_overview'],
+    input:
+        samplesheet_nas = config['all']['samplesheet_nas'],
     output:
-        'samplesheet.csv'
+        samplesheet = 'samplesheet.csv',
+        links       = directory(config['all']['data_dir'].rstrip('/') + '/links'),
+    params:
+        nas_prefix   = NAS_LOCAL_PREFIX,
+        sample_regex = config['all']['sample_regex'],
+        links_dir    = config['all']['data_dir'].rstrip('/') + '/links',
     conda:
         'envs/R.yaml'
     script:
         'scripts/Create_Samplesheet_PON.R'
 
-        
 #+++++++++++++++++++++++++++++++++++++++++ 1 RUN SAREK VARIANT CALLING +++++++++++++++++++++++++++++++++++++++++++++
 # 1.1 Download Sarek
 rule Download_Sarek:
@@ -40,15 +52,19 @@ rule Download_Sarek:
         "envs/nextflow.yaml"
     shell:
         """
-	export NXF_SINGULARITY_CACHEDIR={params.singularity_dir}        
-	nf-core pipelines download --outdir {output} --container-system singularity --compress none -r dev sarek
+        export NXF_SINGULARITY_CACHEDIR={params.singularity_dir}
+        nf-core pipelines download --outdir {output} --container-system singularity --compress none -r dev sarek
         """
 
 # 1.2 Run Sarek
+#     `fastqs = nas_fastqs` is what makes this work: Snakemake fetches this
+#     sample's fastqs before the job and removes the local copies once it is done,
+#     so only the samples currently running occupy disk.
 rule Sarek:
     input:
         samplesheet = os.path.abspath('samplesheet.csv'),
-        sarek = os.path.abspath(".nf-core-sarek/")
+        sarek       = os.path.abspath(".nf-core-sarek/"),
+        fastqs      = nas_fastqs,
     output:
         samplesheet = output_dir + 'sarek/{sample}/csv/samplesheet.csv',
         vcf = output_dir + 'sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz',
@@ -101,23 +117,18 @@ rule Sarek:
 
         # Save alignment as .bam (to be fixed with --save-output-as-bam in new sarek release)
         samtools view -b -o {output.md_bam} {output.md_cram}
-        
-        # Clean cache and intermediate files upon completion but keep on failure
-        status=$?
-        if [ $status -eq 0 ]; then
+
+        # Only reached when every command above succeeded (set -e), so the nextflow
+        # cache is kept on failure for -resume and removed on success.
         rm -rf {params.workdir}
-        else
-        echo "Sarek failed"
-        fi
-        
         """
 
-
-#-------------------------------------------------------------------------------------------------------------        
+#-------------------------------------------------------------------------------------------------------------
 # 1.2 Create Mutect2 PON
 rule Create_PON:
     input:
-        expand(output_dir + 'sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz', sample = Samples)
+        vcfs = expand(output_dir + 'sarek/{sample}/variant_calling/mutect2/{sample}_normal1/{sample}_normal1.mutect2.filtered.vcf.gz',
+                      sample = Samples)
     output:
         filelist = output_dir + 'PON/normal_list.txt',
         merged_vcf = output_dir + 'PON/merged_normals.vcf.gz',
@@ -133,10 +144,11 @@ rule Create_PON:
     shell:
         """
         # create file list
-        printf "%s\n" {input.vcfs} > {output.filelist}
-        
+        printf "%s\\n" {input.vcfs} > {output.filelist}
+
         # merge vcfs
-        bcftools merge {output.filelist} --merge all -Oz {output.merged_vcf}
+        bcftools merge --file-list {output.filelist} --merge all -Oz -o {output.merged_vcf}
+        bcftools index -t {output.merged_vcf}
 
         # Create Mutect2 panel of normals
         gatk CreateSomaticPanelOfNormals \
@@ -170,7 +182,8 @@ rule CNA_analysis:
 
 rule Create_CNA_PON:
     input:
-        QDNAseq = lambda wildcards: expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds',sample = Samples, binsize = wildcards.binsize)
+        QDNAseq = lambda wildcards: expand(output_dir + 'QDNAseq/{binsize}/{sample}/data/QDNAseq_Readcounts.Rds',
+                                           sample = Samples, binsize = wildcards.binsize)
     output:
         PON = output_dir + 'PON/CNA_PON_{binsize}.Rds',
     resources:
@@ -181,7 +194,3 @@ rule Create_CNA_PON:
         "envs/CNA.yaml"
     script:
         'scripts/Create_CNA_PON.R'
-
-
-    
-        
