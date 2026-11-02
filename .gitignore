@@ -22,3 +22,4 @@ samplesheet.csv
 *.txt
 .sarek/
 .nf-core-sarek/
+samplesheets/

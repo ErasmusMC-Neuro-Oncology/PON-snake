@@ -132,7 +132,8 @@ def _split_list(value):
             if p.strip() and p.strip() != 'NA']
 
 
-NAS_FASTQ = {}      # patient -> [R1..., R2...] (paths relative to the NAS root)
+NAS_FASTQ = {}       # patient -> files to retrieve (fastq pairs, or bam + bai)
+NAS_KIND  = {}       # patient -> 'fastq' | 'bam'
 
 if os.path.isfile(_NAS_TSV):
     _tbl = pd.read_csv(_NAS_TSV, sep='\t')
@@ -144,21 +145,44 @@ if os.path.isfile(_NAS_TSV):
         _p  = str(_row['Sample'])
         _r1 = _split_list(_row.get('R1_DNA'))
         _r2 = _split_list(_row.get('R2_DNA'))
+
         if not _r1:
             continue                            # no sequencing data for this sample
-        if len(_r1) != len(_r2):
-            raise ValueError(f"R1/R2 fastq counts differ for {_p}: {len(_r1)} vs {len(_r2)}")
-        if any(p.lower().endswith('.bam') for p in _r1):
-            raise ValueError(f"{_p}: R1_DNA is a BAM; this pipeline needs fastq input")
-        NAS_FASTQ[_p] = _r1 + _r2
+
+        if _r1[0].lower().endswith('.bam'):
+            # pre-aligned BAM -> sarek --step markduplicates; no R2, index alongside
+            if len(_r1) != 1:
+                raise ValueError(f"expected exactly 1 BAM for {_p}, found {len(_r1)}")
+            if _r2:
+                raise ValueError(f"R2_DNA must be empty for BAM input ({_p})")
+            NAS_FASTQ[_p] = _r1 + [p + '.bai' for p in _r1]
+            NAS_KIND[_p]  = 'bam'
+        else:
+            if len(_r1) != len(_r2):
+                raise ValueError(f"R1/R2 fastq counts differ for {_p}: {len(_r1)} vs {len(_r2)}")
+            NAS_FASTQ[_p] = _r1 + _r2
+            NAS_KIND[_p]  = 'fastq'
 
 PATIENTS = sorted(NAS_FASTQ)
 
 
 def nas_fastqs(wildcards):
-    """This sample's fastqs on the NAS. Declaring these makes Snakemake retrieve
-    them before the job and delete the local copies once it has finished."""
+    """This sample's raw files on the NAS (fastqs, or bam + bai). Declaring these
+    makes Snakemake retrieve them before the job and delete the local copies once
+    it has finished."""
     paths = NAS_FASTQ.get(wildcards.sample)
     if not paths:
-        raise ValueError(f"no NAS fastqs known for sample '{wildcards.sample}'")
+        raise ValueError(f"no NAS input known for sample '{wildcards.sample}'")
     return [nas(p) for p in paths]
+
+
+def sarek_step(wildcards):
+    """Each sample is its own nextflow run, so fastq and BAM samples can be mixed:
+    fastq starts at mapping, a pre-aligned BAM at markduplicates."""
+    return 'markduplicates' if NAS_KIND[wildcards.sample] == 'bam' else 'mapping'
+
+
+def sarek_save_mapped(wildcards):
+    """--save_mapped only applies when sarek does the mapping."""
+    return '--save_mapped' if NAS_KIND[wildcards.sample] == 'fastq' else ''
+

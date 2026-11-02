@@ -3,8 +3,8 @@ all:
     output_dir: "/trinity/home/r115502/PON/output/"
     data_dir: "/trinity/home/r115502/PON/PON-snake/data/"
     ref: '/trinity/home/r115502/Resources/BWAIndex/genome.fa'
-    samplesheet_nas: "/trinity/home/r115502/NONC_Samplesheet/output/2026-10-21/Samplesheet_NAS.tsv"
-    sample_regex: 'Normal_brain' 
+    samplesheet_nas: "/trinity/home/r115502/NONC_Samplesheet/output/2026-11-02/Samplesheet_NAS.tsv"
+    sample_regex: '^normalGLASSNL' 
 
 # Raw data is READ from the NAS; nothing is written back (no `root` needed).
 # The fastqs are nas() inputs of the Sarek rule, so Snakemake fetches them per
@@ -15,6 +15,7 @@ nas_storage:
     password_file: '~/.passwd/second_surgery2_pass'   # chmod 600
 
 sarek:
+  tool: '/trinity/home/r115502/tools/nf_core/sarek/nf-core-sarek/'
   workdir: '/trinity/home/r115502/PON/PON-snake/.sarek/work/' # directory to save sarek working dir
   targetregions : "/trinity/home/r115502/Resources/target_regions/S31285117_Regions_Annotated.bed" # Exome regions
   interval_padding: 100 # region padding around capture regions
