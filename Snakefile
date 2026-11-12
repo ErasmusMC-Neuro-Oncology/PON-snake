@@ -8,7 +8,10 @@ import os
 #+++++++++++++++++++++++++++++++++++++++ 0 PREPARE WILDCARDS AND TARGET ++++++++++++++++++++++++++++++++++++++++++++
 # 0.1 Prepare variables and wildcards
 output_dir = config["all"]["output_dir"]
+<<<<<<< HEAD
 
+=======
+>>>>>>> 3bb10c6 (test with GLASS-NL)
 Samples = PATIENTS
 
 #-------------------------------------------------------------------------------------------------------------------
@@ -21,17 +24,20 @@ rule all:
                sample = Samples, binsize = config['CopyWriteR']['binsizes'])
 
 #++++++++++++++++++++++++++++++++++++++++++++ 0 CREATE SAMPLESHEET ++++++++++++++++++++++++++++++++++++++++++++++++
-# Writes the paths the NAS fastqs WILL be retrieved to (via symlinks with
-# shell-safe names). It declares no NAS files itself, so nothing is downloaded
-# here: the Sarek rule declares them and triggers the transfer per sample.
 rule Create_Samplesheet:
     input:
         samplesheet_nas = config['all']['samplesheet_nas'],
     output:
+<<<<<<< HEAD
         # one sheet per sample: a fastq sheet and a BAM sheet have different
         # columns, so they cannot live in one combined file
         per_sample = expand('samplesheets/{sample}.csv', sample = PATIENTS),
         links      = directory(config['all']['data_dir'].rstrip('/') + '/links'),
+=======
+        samplesheet = output_dir + 'samplesheets/samplesheet.csv',
+        per_patient = expand(output_dir + 'samplesheets/Samplesheet_WES_{sample}.csv',sample = Samples),
+        links       = directory(config['all']['data_dir'].rstrip('/') + '/links'),
+>>>>>>> 3bb10c6 (test with GLASS-NL)
     params:
         nas_prefix       = NAS_LOCAL_PREFIX,
         sample_regex     = config['all']['sample_regex'],
@@ -43,6 +49,7 @@ rule Create_Samplesheet:
         'scripts/Create_Samplesheet_PON.R'
 
 #+++++++++++++++++++++++++++++++++++++++++ 1 RUN SAREK VARIANT CALLING +++++++++++++++++++++++++++++++++++++++++++++
+<<<<<<< HEAD
 # 1.2 Run Sarek
 #     `fastqs = nas_fastqs` is what makes this work: Snakemake fetches this
 #     sample's fastqs before the job and removes the local copies once it is done,
@@ -50,6 +57,13 @@ rule Create_Samplesheet:
 rule Sarek:
     input:
         samplesheet = 'samplesheets/{sample}.csv',
+=======
+# 1.1 Run Sarek
+rule Sarek:
+    input:
+        samplesheet = output_dir + 'samplesheets/Samplesheet_WES_{sample}.csv',
+        sarek = config['sarek']['tool'],
+>>>>>>> 3bb10c6 (test with GLASS-NL)
         fastqs      = nas_fastqs,
         sarek = config['sarek']['tool'],
     output:
@@ -63,8 +77,6 @@ rule Sarek:
         runtime='30h'
     conda:
         "envs/nextflow.yaml"
-    log:
-        os.path.abspath("logs/sarek/{sample}/nextflow_"+datetime.now().strftime("%Y_%m_%d_%H%M%S")+".log")
     params:
         version = 'dev',
         genome = 'GATK.GRCh38',
@@ -85,9 +97,14 @@ rule Sarek:
         export NXF_SINGULARITY_CACHEDIR={params.singularity_dir}
         export NXF_CACHE_DIR={params.workdir}
 
+<<<<<<< HEAD
         nextflow -log {log} run {input.sarek}/{params.version}/ \
+=======
+        nextflow run {input.sarek}/{params.version}/ \
+>>>>>>> 3bb10c6 (test with GLASS-NL)
            -profile {params.profile} \
            -work-dir {params.workdir} \
+           -resume \
            -c {params.Mutect2_params} \
               --input {input.samplesheet} \
               --outdir {params.outdir} \

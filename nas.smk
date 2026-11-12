@@ -148,20 +148,33 @@ if os.path.isfile(_NAS_TSV):
 
         if not _r1:
             continue                            # no sequencing data for this sample
+<<<<<<< HEAD
 
         if _r1[0].lower().endswith('.bam'):
             # pre-aligned BAM -> sarek --step markduplicates; no R2, index alongside
+=======
+        if _r1 and _r1[0].lower().endswith('.bam'):
+            # pre-aligned BAM (sarek --step markduplicates): no R2, index alongside
+>>>>>>> 3bb10c6 (test with GLASS-NL)
             if len(_r1) != 1:
                 raise ValueError(f"expected exactly 1 BAM for {_p}, found {len(_r1)}")
             if _r2:
                 raise ValueError(f"R2_DNA must be empty for BAM input ({_p})")
             NAS_FASTQ[_p] = _r1 + [p + '.bai' for p in _r1]
+<<<<<<< HEAD
             NAS_KIND[_p]  = 'bam'
         else:
             if len(_r1) != len(_r2):
                 raise ValueError(f"R1/R2 fastq counts differ for {_p}: {len(_r1)} vs {len(_r2)}")
             NAS_FASTQ[_p] = _r1 + _r2
             NAS_KIND[_p]  = 'fastq'
+=======
+        elif _r1:
+            if len(_r1) != len(_r2):
+                raise ValueError(f"R1/R2 fastq counts differ for {_p}: {len(_r1)} vs {len(_r2)}")
+            NAS_FASTQ[_p] = _r1 + _r2
+        NAS_FASTQ[_p] = _r1 + _r2
+>>>>>>> 3bb10c6 (test with GLASS-NL)
 
 PATIENTS = sorted(NAS_FASTQ)
 

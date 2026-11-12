@@ -76,15 +76,19 @@ link_safe <- function(paths, patient){
     dest <- file.path(normalizePath(pdir), names_ok)
     for(i in seq_along(paths)){
         unlink(dest[i])
-        # the target may not exist yet (it is fetched when the Sarek job runs)
-        if(!file.symlink(normalizePath(paths[i], mustWork = FALSE), dest[i]))
-            stop("could not link ", paths[i], " -> ", dest[i])
+        target <- normalizePath(paths[i], mustWork = FALSE)
+        if(!file.symlink(target, dest[i]))
+            stop("could not link ", target, " -> ", dest[i])
     }
     dest
 }
 
 is_bam <- function(x) length(x) > 0 && grepl('\\.bam$', x[1], ignore.case = TRUE)
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 3bb10c6 (test with GLASS-NL)
 #-------------------------------------------------------------------------------
 # 1.1 Read the NAS samplesheet and select this project's samples
 #-------------------------------------------------------------------------------
@@ -98,18 +102,25 @@ if(nrow(Selection) == 0)
 #-------------------------------------------------------------------------------
 # 1.2 Write one sheet per sample
 #-------------------------------------------------------------------------------
+<<<<<<< HEAD
 dir.create(links_dir,       recursive = TRUE, showWarnings = FALSE)
 dir.create(samplesheet_dir, recursive = TRUE, showWarnings = FALSE)
 
 n_written <- 0
+=======
+WES_fastq_rows <- list()
+WES_bam_rows   <- list()
+>>>>>>> 3bb10c6 (test with GLASS-NL)
 
 for(i in seq_len(nrow(Selection))){
-    row     <- Selection[i, ]
-    patient <- as.character(row$Sample)
+    row       <- Selection[i, ]
+    patient   <- as.character(row$Sample)
+    sample_id <- paste0(patient, '_tumor1')
 
     R1 <- split_list(row$R1_DNA)
     R2 <- split_list(row$R2_DNA)
 
+<<<<<<< HEAD
     if(length(R1) == 0) next            # no sequencing data for this sample
 
     if(is_bam(R1)){
@@ -134,12 +145,38 @@ for(i in seq_len(nrow(Selection))){
         Sheet <- data.frame(
             patient = patient,
             sample  = paste0(patient, '_normal1'),
+=======
+    # --- pre-aligned BAM ---
+    if(is_bam(R1)){
+        if(length(R1) != 1)
+            stop("expected exactly 1 BAM for ", patient, ", found ", length(R1))
+        if(length(R2) > 0)
+            stop("R2_DNA must be empty for BAM input (", patient, ")")
+        bam <- link_safe(retrieved(R1), patient)
+        WES_bam_rows[[patient]] <- data.frame(
+            patient = patient,
+            sample  = sample_id,
+            status  = 1,
+            lane = 1,
+            bam     = bam)
+
+    # --- fastq ---
+    }else if(length(R1) > 0){
+        if(length(R1) != length(R2))
+            stop("R1/R2 fastq counts differ for ", patient, ": ", length(R1), " vs ", length(R2))
+        fastq_1 <- link_safe(retrieved(R1), patient)
+        fastq_2 <- link_safe(retrieved(R2), patient)
+        WES_fastq_rows[[patient]] <- data.frame(
+            patient = patient,
+            sample  = sample_id,
+>>>>>>> 3bb10c6 (test with GLASS-NL)
             status  = 1,
             lane    = vapply(basename(fastq_1), function(b) strsplit(b, '_')[[1]][4],
                              character(1), USE.NAMES = FALSE),
             fastq_1 = fastq_1,
             fastq_2 = fastq_2)
     }
+<<<<<<< HEAD
 
     write.table(Sheet, file = file.path(samplesheet_dir, paste0(patient, '.csv')),
                 sep = ',', quote = F, row.names = F)
@@ -148,3 +185,41 @@ for(i in seq_len(nrow(Selection))){
 
 if(n_written == 0)
     stop("none of the samples matching '", sample_regex, "' have sequencing data")
+=======
+}
+
+# one sarek run has one --step, so a subproject cannot mix the two
+if(length(WES_fastq_rows) > 0 && length(WES_bam_rows) > 0)
+    stop("this selection mixes fastq samples (",
+         paste(names(WES_fastq_rows), collapse = ', '),
+         ") and BAM samples (", paste(names(WES_bam_rows), collapse = ', '),
+         "); sarek needs one --step per run, so split them into two subprojects")
+
+Samplesheet_WES <- if (length(WES_bam_rows) > 0) {
+    bind_rows(WES_bam_rows)
+} else if (length(WES_fastq_rows) > 0) {
+    bind_rows(WES_fastq_rows)
+} else {
+    data.frame(patient = character(0), sample = character(0), status = integer(0),
+               lane = character(0), fastq_1 = character(0), fastq_2 = character(0))
+}
+
+#-------------------------------------------------------------------------------
+# 3.1 Write sheets
+#-------------------------------------------------------------------------------
+dir.create(links_dir,                   recursive = TRUE, showWarnings = FALSE)
+dir.create(dirname(output),         recursive = TRUE, showWarnings = FALSE)
+
+write.table(Samplesheet_WES,         output,         sep = ',', row.names = F, quote = F)
+
+# one sheet per patient for sarek
+purrr::walk(
+    unique(Samplesheet_WES$patient),
+    function(pat){
+        Samplesheet_WES %>% filter(patient == pat) %>%
+            write.table(file.path(dirname(output), paste0('Samplesheet_WES_', pat, '.csv')),
+                        sep = ',', row.names = F, quote = F)
+    }
+)
+
+>>>>>>> 3bb10c6 (test with GLASS-NL)
